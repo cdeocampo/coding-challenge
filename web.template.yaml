@@ -155,7 +155,8 @@ Resources:
     Type: AWS::AutoScaling::AutoScalingGroup
     Properties:
       LaunchConfigurationName: !Ref WebServerLaunchConfig
-      TargetGroupARNs: !Ref WebTargetGroup
+      TargetGroupARNs:
+        - !Ref WebTargetGroup
       MinSize: 0
       MaxSize: 4
       DesiredCapacity: !Ref InitialWebServerCapacityParam
