@@ -166,6 +166,56 @@ Resources:
         Value: TRIBE Web Server"
         PropagateAtLaunch: true
 
+  WebServerAutoScalingPolicyAddInstance:
+    Type: AWS::AutoScaling::ScalingPolicy
+    Properties:
+      AdjustmentType: ChangeInCapacity
+      AutoScalingGroupName: !Ref WebServerAutoScalingGroup
+      Cooldown: 120 # 2 minutes
+      ScalingAdjustment: 1
+
+  WebServerAutoScalingPolicyRemoveInstance:
+    Type: AWS::AutoScaling::ScalingPolicy
+    Properties:
+      AdjustmentType: ChangeInCapacity
+      AutoScalingGroupName: !Ref WebServerAutoScalingGroup
+      Cooldown: 120 # 2 minutes
+      ScalingAdjustment: -1
+
+  WebServerCPUAlarmHigh:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmDescription: Alarm if CPU if cpu averages > 80 for 60 seconds
+      MetricName: CPUUtilization
+      AlarmActions:
+      -  !Ref WebServerAutoScalingPolicyAddInstance
+      ComparisonOperator: GreaterThanThreshold
+      Dimensions:
+      - Name: AutoScalingGroupName
+        Value: !Ref WebServerAutoScalingGroup
+      Namespace: AWS/EC2
+      EvaluationPeriods: 1
+      Period: 60 # 1 minute
+      Statistic: Average
+      Threshold: 80
+
+  WebServerCPUAlarmLow:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmDescription: Alarm if CPU if cpu averages < 30 for 3 minutes
+      MetricName: CPUUtilization
+      AlarmActions:
+      -  !Ref WebServerAutoScalingPolicyRemoveInstance
+      ComparisonOperator: LessThanThreshold
+      Dimensions:
+      - Name: AutoScalingGroupName
+        Value: !Ref WebServerAutoScalingGroup
+      Namespace: AWS/EC2
+      EvaluationPeriods: 3
+      Period: 60 # 1 minute
+      Statistic: Average
+      Threshold: 30
+
   AppLB8080Listener:
     Type: AWS::ElasticLoadBalancingV2::Listener
     Properties:
