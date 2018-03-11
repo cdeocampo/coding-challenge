@@ -75,7 +75,7 @@ Resources:
     Type: AWS::IAM::InstanceProfile
     Properties:
       Roles:
-      - !Ref WebServerRole
+      - !Ref EcsForEc2Role
 
   WebServerLaunchConfig:
     Type: AWS::AutoScaling::LaunchConfiguration
