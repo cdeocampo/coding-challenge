@@ -43,6 +43,16 @@ Resources:
       - Key: Name
         Value: TRIBE Application LB SG
 
+  WebTargetGroup:
+    Type: AWS::ElasticLoadBalancingV2::TargetGroup
+    Properties:
+      HealthCheckIntervalSeconds: 60
+      UnhealthyThresholdCount: 10
+      HealthCheckPath: /
+      Port: 8080
+      Protocol: HTTP
+      VpcId: !Ref VpcIdParam
+
   AppLB8080Listener:
     Type: AWS::ElasticLoadBalancingV2::Listener
     Properties:
