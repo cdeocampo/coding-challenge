@@ -9,6 +9,12 @@ Parameters:
   VpcCidrParam:
     Type: String
     Description: Enter the CIDR of the VPC
+  PrivateSubnetAParam:
+    Type: String
+    Description: Enter the CIDR of private subnet A
+  PrivateSubnetBParam:
+    Type: String
+    Description: Enter the CIDR of private subnet B
   PublicSubnetAParam:
     Type: String
     Description: Enter the CIDR of public subnet A
