@@ -105,7 +105,7 @@ Resources:
           #!/bin/bash -xe
           echo ECS_CLUSTER=${EcsCluster} >> /etc/ecs/ecs.config
           yum install -y aws-cfn-bootstrap
-          /opt/aws/bin/cfn-signal -e $? --stack ${AWS::StackName} --resource ContainerInstanceLaunchConfig --region ${AWS::Region}
+          /opt/aws/bin/cfn-signal -e $? --stack ${AWS::StackName} --resource ContainerInstanceAutoScalingGroup --region ${AWS::Region}
 
   WebTargetGroup:
     Type: AWS::ElasticLoadBalancingV2::TargetGroup
