@@ -3,7 +3,7 @@ AWSTemplateFormatVersion: "2010-09-09"
 
 Description:
   This CloudFormation script will create the base VPC needed to setup TRIBE's
-  VPC and a bastion server.
+  VPC
 
 Parameters:
   VpcCidrParam:
