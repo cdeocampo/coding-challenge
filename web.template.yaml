@@ -143,7 +143,6 @@ Resources:
   WebTargetGroup:
     Type: AWS::ElasticLoadBalancingV2::TargetGroup
     Properties:
-      Name: TRIBE-WebTargetGroup
       HealthCheckIntervalSeconds: 60
       UnhealthyThresholdCount: 10
       HealthCheckPath: /
