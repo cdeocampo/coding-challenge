@@ -235,6 +235,55 @@ Resources:
       Subnets: !Ref PublicSubnetsParam
       Type: application
 
+  EcsServiceRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: 2008-10-17
+        Statement:
+          - Sid: ''
+            Effect: Allow
+            Principal:
+              Service: ecs.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AmazonEC2ContainerServiceRole
+
+  EcsCluster:
+    Type: AWS::ECS::Cluster
+
+  WebTaskDefinition:
+    Type: AWS::ECS::TaskDefinition
+    Properties:
+      ContainerDefinitions:
+        Name: WebServer
+        Image: hello-world
+        Cpu: 10
+        Memory: 128
+        PortMappings:
+          ContainerPort: 8080
+          HostPort: 8080
+        EntryPoint:
+          - /usr/sbin/apache2
+          - -D
+          - FOREGROUND
+        Essential: true
+      Family: webserver
+
+  WebApp:
+    Type: AWS::ECS::Service
+    DependsOn:
+    - AppLB8080Listener
+    Properties:
+      Role: !Ref EcsServiceRole
+      TaskDefinition: !Ref WebTaskDefinition
+      DesiredCount: 1
+      LoadBalancers:
+      - TargetGroupArn: !Ref WebTargetGroup
+        ContainerPort: 8080
+        ContainerName: WebServer
+      Cluster: !Ref EcsCluster
+
 Outputs:
   ApplicationDnsName:
     Description: DNS name for the load balanced application
