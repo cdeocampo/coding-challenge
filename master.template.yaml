@@ -72,3 +72,8 @@ Resources:
           - - !GetAtt VpcStack.Outputs.PrivateSubnetA
             - !GetAtt VpcStack.Outputs.PrivateSubnetB
         InitialWebServerCapacityParam: 2
+
+Outputs:
+  ApplicationDnsName:
+    Description: DNS name for the load balanced application
+    Value: !GetAtt WebTierStack.Outputs.ApplicationDnsName

@@ -234,3 +234,8 @@ Resources:
         - !Ref AppLBSecurityGroup
       Subnets: !Ref PublicSubnetsParam
       Type: application
+
+Outputs:
+  ApplicationDnsName:
+    Description: DNS name for the load balanced application
+    Value: !GetAtt AppLB.DNSName
