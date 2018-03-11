@@ -54,6 +54,7 @@ Resources:
     Type: AWS::CloudFormation::Stack
     Properties:
       TemplateURL:
+        Fn::Join:
         - '/'
         - - !Sub "https://${S3BucketParam}.s3.amazonaws.com"
           - web.template.yaml
@@ -64,10 +65,10 @@ Resources:
           Fn::Join:
           - ', '
           - - !GetAtt VpcStack.Outputs.PublicSubnetA
-          - - !GetAtt VpcStack.Outputs.PublicSubnetB
+            - !GetAtt VpcStack.Outputs.PublicSubnetB
         PrivateSubnetsParam:
           Fn::Join:
           - ', '
           - - !GetAtt VpcStack.Outputs.PrivateSubnetA
-          - - !GetAtt VpcStack.Outputs.PrivateSubnetB
+            - !GetAtt VpcStack.Outputs.PrivateSubnetB
         InitialWebServerCapacityParam: 2
