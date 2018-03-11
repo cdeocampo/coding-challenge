@@ -43,10 +43,10 @@ Resources:
       - Key: Name
         Value: TRIBE Application LB SG
 
-  WebServerSecurityGroup:
+  ContainerInstanceSecurityGroup:
     Type: AWS::EC2::SecurityGroup
     Properties:
-      GroupDescription: Only allow IPs or SGs that only need to access the web servers
+      GroupDescription: Only allow IPs or SGs that only need to access the container instances
       VpcId: !Ref VpcIdParam
       SecurityGroupIngress:
       - IpProtocol: tcp
@@ -56,6 +56,20 @@ Resources:
       Tags:
       - Key: Name
         Value: TRIBE Web Server SG
+
+  EcsAutoScaleRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: 2008-10-17
+        Statement:
+          - Sid: ''
+            Effect: Allow
+            Principal:
+              Service: ecs.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AmazonEC2ContainerServiceAutoscaleRole
 
   EcsForEc2Role:
     Type: AWS::IAM::Role
@@ -77,53 +91,39 @@ Resources:
       Roles:
       - !Ref EcsForEc2Role
 
-  WebServerLaunchConfig:
+  ContainerInstanceLaunchConfig:
     Type: AWS::AutoScaling::LaunchConfiguration
     Properties:
       ImageId: !FindInMap [Ami, !Ref "AWS::Region", ContainerInstance]
       IamInstanceProfile: !Ref EcsForEc2InstanceProfile
       InstanceType: t2.micro
       SecurityGroups:
-        - !Ref WebServerSecurityGroup
+        - !Ref ContainerInstanceSecurityGroup
       KeyName: !Ref SSHKeyNameParam
       UserData:
         Fn::Base64: !Sub |
-          #cloud-config
-          package_update: false
-          runcmd:
-            - /opt/aws/bin/cfn-signal -e 0 --stack ${AWS::StackName} --resource WebServerLaunchConfig --region ${AWS::Region}
-    CreationPolicy:
-      ResourceSignal:
-        Count: !Ref InitialWebServerCapacityParam
-        Timeout: PT10M
-    UpdatePolicy:
-      AutoScalingRollingUpdate:
-        MinInstancesInService: 1
-        MaxBatchSize: 1
-        MinSuccessfulInstancesPercent: 50
-        PauseTime: PT15M
-        WaitOnResourceSignals: true
-        SuspendProcesses:
-        - HealthCheck
-        - ReplaceUnhealthy
-        - AZRebalance
-        - AlarmNotification
-        - ScheduledActions
+          #!/bin/bash -xe
+          echo ECS_CLUSTER=${EcsCluster} >> /etc/ecs/ecs.config
+          yum install -y aws-cfn-bootstrap
+          /opt/aws/bin/cfn-signal -e $? --stack ${AWS::StackName} --resource ContainerInstanceLaunchConfig --region ${AWS::Region}
 
   WebTargetGroup:
     Type: AWS::ElasticLoadBalancingV2::TargetGroup
     Properties:
-      HealthCheckIntervalSeconds: 60
-      UnhealthyThresholdCount: 10
+      HealthCheckIntervalSeconds: 10
       HealthCheckPath: /
+      HealthCheckProtocol: HTTP
+      HealthCheckTimeoutSeconds: 5
+      HealthyThresholdCount: 2
+      UnhealthyThresholdCount: 2
       Port: 8080
       Protocol: HTTP
       VpcId: !Ref VpcIdParam
 
-  WebServerAutoScalingGroup:
+  ContainerInstanceAutoScalingGroup:
     Type: AWS::AutoScaling::AutoScalingGroup
     Properties:
-      LaunchConfigurationName: !Ref WebServerLaunchConfig
+      LaunchConfigurationName: !Ref ContainerInstanceLaunchConfig
       TargetGroupARNs:
         - !Ref WebTargetGroup
       MinSize: 1
@@ -132,14 +132,44 @@ Resources:
       VPCZoneIdentifier: !Ref PrivateSubnetsParam
       Tags:
       - Key: Name
-        Value: TRIBE Web Server
+        Value: TRIBE Container Instance
         PropagateAtLaunch: true
+    CreationPolicy:
+      ResourceSignal:
+        Timeout: PT15M
+    UpdatePolicy:
+      AutoScalingReplacingUpdate:
+        WillReplace: 'true'
+
+  WebScalingTarget:
+    Type: AWS::ApplicationAutoScaling::ScalableTarget
+    Properties:
+      MaxCapacity: 2
+      MinCapacity: 1
+      ResourceId: !Join ['', [service/, !Ref EcsCluster, /, !GetAtt WebApp.Name]]
+      RoleARN: !GetAtt EcsAutoScaleRole.Arn
+      ScalableDimension: ecs:service:DesiredCount
+      ServiceNamespace: ecs
+
+  WebScalingPolicy:
+    Type: AWS::ApplicationAutoScaling::ScalingPolicy
+    Properties:
+      PolicyName: AStepPolicy
+      PolicyType: StepScaling
+      ScalingTargetId: !Ref WebScalingTarget
+      StepScalingPolicyConfiguration:
+        AdjustmentType: PercentChangeInCapacity
+        Cooldown: 60
+        MetricAggregationType: Average
+        StepAdjustments:
+        - MetricIntervalLowerBound: 0
+          ScalingAdjustment: 200
 
   WebServerAutoScalingPolicyAddInstance:
     Type: AWS::AutoScaling::ScalingPolicy
     Properties:
       AdjustmentType: ChangeInCapacity
-      AutoScalingGroupName: !Ref WebServerAutoScalingGroup
+      AutoScalingGroupName: !Ref ContainerInstanceAutoScalingGroup
       Cooldown: 120 # 2 minutes
       ScalingAdjustment: 1
 
@@ -147,7 +177,7 @@ Resources:
     Type: AWS::AutoScaling::ScalingPolicy
     Properties:
       AdjustmentType: ChangeInCapacity
-      AutoScalingGroupName: !Ref WebServerAutoScalingGroup
+      AutoScalingGroupName: !Ref ContainerInstanceAutoScalingGroup
       Cooldown: 120 # 2 minutes
       ScalingAdjustment: -1
 
@@ -161,7 +191,7 @@ Resources:
       ComparisonOperator: GreaterThanThreshold
       Dimensions:
       - Name: AutoScalingGroupName
-        Value: !Ref WebServerAutoScalingGroup
+        Value: !Ref ContainerInstanceAutoScalingGroup
       Namespace: AWS/EC2
       EvaluationPeriods: 1
       Period: 60 # 1 minute
@@ -178,12 +208,24 @@ Resources:
       ComparisonOperator: LessThanThreshold
       Dimensions:
       - Name: AutoScalingGroupName
-        Value: !Ref WebServerAutoScalingGroup
+        Value: !Ref ContainerInstanceAutoScalingGroup
       Namespace: AWS/EC2
       EvaluationPeriods: 3
       Period: 60 # 1 minute
       Statistic: Average
       Threshold: 30
+
+  AppLB8080ListenerRule:
+    Type: AWS::ElasticLoadBalancingV2::ListenerRule
+    Properties:
+      Actions:
+      - Type: forward
+        TargetGroupArn: !Ref WebTargetGroup
+      Conditions:
+      - Field: path-pattern
+        Values: [/]
+      ListenerArn: !Ref AppLB8080Listener
+      Priority: 1
 
   AppLB8080Listener:
     Type: AWS::ElasticLoadBalancingV2::Listener
