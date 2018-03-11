@@ -219,16 +219,12 @@ Resources:
     Properties:
       ContainerDefinitions:
         - Name: WebServer
-          Image: hello-world
+          Image: nginx
           Cpu: 10
           Memory: 128
           PortMappings:
             - ContainerPort: 8080
               HostPort: 8080
-          EntryPoint:
-            - /usr/sbin/apache2
-            - -D
-            - FOREGROUND
           Essential: true
       Family: webserver
 
