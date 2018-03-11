@@ -163,7 +163,7 @@ Resources:
       VPCZoneIdentifier: !Ref PrivateSubnetsParam
       Tags:
       - Key: Name
-        Value: TRIBE Web Server"
+        Value: TRIBE Web Server
         PropagateAtLaunch: true
 
   WebServerAutoScalingPolicyAddInstance:
