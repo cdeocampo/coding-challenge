@@ -1,0 +1,48 @@
+---
+AWSTemplateFormatVersion: "2010-09-09"
+
+Description:
+  This CloudFormation script acts as the root template and will create the
+  infrastructure for the coding challenge
+
+Parameters:
+  VpcCidrParam:
+    Type: String
+    Description: Enter the CIDR of the VPC
+  PrivateSubnetAParam:
+    Type: String
+    Description: Enter the CIDR of private subnet A
+  PrivateSubnetBParam:
+    Type: String
+    Description: Enter the CIDR of private subnet B
+  PublicSubnetAParam:
+    Type: String
+    Description: Enter the CIDR of public subnet A
+  PublicSubnetBParam:
+    Type: String
+    Description: Enter the CIDR of public subnet B
+  RegionParam:
+    Type: String
+    Description: Enter the name of the region
+    AllowedValues:
+      - Singapore
+  S3BucketParam:
+    Type: String
+    Description: Bucket name where templates are stored
+
+Resources:
+  VpcStack:
+    Type: AWS::CloudFormation::Stack
+    Properties:
+      TemplateURL:
+        Fn::Join:
+        - '/'
+        - - !Sub "https://${S3BucketParam}.s3.amazonaws.com"
+          - vpc.template.yaml
+      Parameters:
+        VpcCidrParam: !Ref VpcCidrParam
+        PrivateSubnetAParam: !Ref PrivateSubnetAParam
+        PrivateSubnetBParam: !Ref PrivateSubnetBParam
+        PublicSubnetAParam: !Ref PublicSubnetAParam
+        PublicSubnetBParam: !Ref PublicSubnetBParam
+        RegionParam: !Ref RegionParam
