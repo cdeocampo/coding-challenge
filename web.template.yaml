@@ -110,7 +110,7 @@ Resources:
             01_runHelloWorld:
               command: docker run -d -p 8080:80 --name webserver kitematic/hello-world-nginx
     Properties:
-      ImageId: !FindInMap [Ami, !Ref AWS::Region, WebServer]
+      ImageId: !FindInMap [Ami, !Ref "AWS::Region", WebServer]
       InstanceType: t2.micro
       SecurityGroups:
         - !Ref WebServerSecurityGroup
