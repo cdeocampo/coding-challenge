@@ -29,6 +29,9 @@ Parameters:
   S3BucketParam:
     Type: String
     Description: Bucket name where templates are stored
+  SSHKeyNameParam:
+    Type: AWS::EC2::KeyPair::KeyName
+    Description: Amazon EC2 Key Pair
 
 Resources:
   VpcStack:
@@ -46,3 +49,25 @@ Resources:
         PublicSubnetAParam: !Ref PublicSubnetAParam
         PublicSubnetBParam: !Ref PublicSubnetBParam
         RegionParam: !Ref RegionParam
+
+  WebTierStack:
+    Type: AWS::CloudFormation::Stack
+    Properties:
+      TemplateURL:
+        - '/'
+        - - !Sub "https://${S3BucketParam}.s3.amazonaws.com"
+          - web.template.yaml
+      Parameters:
+        SSHKeyNameParam: !Ref SSHKeyNameParam
+        VpcIdParam: !GetAtt VpcStack.Outputs.VpcId
+        PublicSubnetsParam:
+          Fn::Join:
+          - ', '
+          - - !GetAtt VpcStack.Outputs.PublicSubnetA
+          - - !GetAtt VpcStack.Outputs.PublicSubnetB
+        PrivateSubnetsParam:
+          Fn::Join:
+          - ', '
+          - - !GetAtt VpcStack.Outputs.PrivateSubnetA
+          - - !GetAtt VpcStack.Outputs.PrivateSubnetB
+        InitialWebServerCapacityParam: 2
