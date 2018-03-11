@@ -43,6 +43,103 @@ Resources:
       - Key: Name
         Value: TRIBE Application LB SG
 
+  WebServerSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Only allow IPs or SGs that only need to access the web servers
+      VpcId: !Ref VpcIdParam
+      SecurityGroupIngress:
+      - IpProtocol: tcp
+        FromPort: 8080
+        ToPort: 8080
+        SourceSecurityGroupId: !Ref AppLBSecurityGroup
+      Tags:
+      - Key: Name
+        Value: TRIBE Web Server SG
+
+  WebServerLaunchConfig:
+    Type: AWS::AutoScaling::LaunchConfiguration
+    Metadata:
+      AWS::CloudFormation::Init:
+        configSets:
+          bootstrap:
+            - initialiseCfn
+            - installDocker
+            - runDocker
+          updateSet:
+            - installDocker
+            - runDocker
+        initialiseCfn:
+          files:
+            /etc/cfn/cfn-hup.conf:
+              content: !Sub |
+                [main]
+                stack=${AWS::StackId}
+                region=${AWS::Region}
+                interval=1
+            /etc/cfn/hooks.d/cfn-auto-reloader.conf:
+              content: !Sub |
+                [cfn-auto-reloader-hook]
+                triggers=post.update
+                path=Resources.WebServerLaunchConfig.Metadata.AWS::CloudFormation::Init
+                action=/opt/aws/bin/cfn-init -v --stack ${AWS::StackId} --region ${AWS::Region} --resource WebServerLaunchConfig --configsets updateSet
+                runas=root
+          services:
+            sysvinit:
+              cfn-hup:
+                enabled: true
+                ensureRunning: true
+                files:
+                  - /etc/cfn/cfn-hup.conf
+                  - /etc/cfn/hooks.d/cfn-auto-reloader.conf
+        installDocker:
+          packages:
+            yum:
+              docker: []
+          commands:
+            01_addUserToDockerGroup:
+              command: usermod -aG docker ec2-user
+              test: "! getent group docker | grep ec2-user"
+          services:
+            sysvinit:
+              docker:
+                enabled: true
+                ensureRunning: true
+        runDocker:
+          commands:
+            01_runHelloWorld:
+              command: docker run -d -p 8080:80 --name webserver kitematic/hello-world-nginx
+    Properties:
+      ImageId: !FindInMap [Ami, !Ref "AWS::Region", WebServer]
+      InstanceType: t2.micro
+      SecurityGroups:
+        - !Ref WebServerSecurityGroup
+      KeyName: !Ref SSHKeyNameParam
+      UserData:
+        Fn::Base64: !Sub |
+          #cloud-config
+          package_update: false
+          runcmd:
+            - /opt/aws/bin/cfn-init -v --stack ${AWS::StackName} --resource WebServerLaunchConfig --configsets bootstrap --region ${AWS::Region}
+            - /opt/aws/bin/cfn-signal -e $? --stack ${AWS::StackName} --resource WebServerLaunchConfig --region ${AWS::Region}
+    CreationPolicy:
+      ResourceSignal:
+        Count: !Ref InitialWebServerCapacityParam
+        Timeout: PT10M
+    UpdatePolicy:
+      AutoScalingRollingUpdate:
+        MinInstancesInService: 1
+        MaxBatchSize: 1
+        MinSuccessfulInstancesPercent: 50
+        PauseTime: PT15M
+        WaitOnResourceSignals: true
+        SuspendProcesses:
+        - HealthCheck
+        - ReplaceUnhealthy
+        - AZRebalance
+        - AlarmNotification
+        - ScheduledActions
+
   WebTargetGroup:
     Type: AWS::ElasticLoadBalancingV2::TargetGroup
     Properties:
@@ -52,6 +149,71 @@ Resources:
       Port: 8080
       Protocol: HTTP
       VpcId: !Ref VpcIdParam
+
+  WebServerAutoScalingGroup:
+    Type: AWS::AutoScaling::AutoScalingGroup
+    Properties:
+      LaunchConfigurationName: !Ref WebServerLaunchConfig
+      TargetGroupARNs:
+        - !Ref WebTargetGroup
+      MinSize: 2
+      MaxSize: 4
+      DesiredCapacity: !Ref InitialWebServerCapacityParam
+      VPCZoneIdentifier: !Ref PrivateSubnetsParam
+      Tags:
+      - Key: Name
+        Value: TRIBE Web Server
+        PropagateAtLaunch: true
+
+  WebServerAutoScalingPolicyAddInstance:
+    Type: AWS::AutoScaling::ScalingPolicy
+    Properties:
+      AdjustmentType: ChangeInCapacity
+      AutoScalingGroupName: !Ref WebServerAutoScalingGroup
+      Cooldown: 120 # 2 minutes
+      ScalingAdjustment: 1
+
+  WebServerAutoScalingPolicyRemoveInstance:
+    Type: AWS::AutoScaling::ScalingPolicy
+    Properties:
+      AdjustmentType: ChangeInCapacity
+      AutoScalingGroupName: !Ref WebServerAutoScalingGroup
+      Cooldown: 120 # 2 minutes
+      ScalingAdjustment: -1
+
+  WebServerCPUAlarmHigh:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmDescription: Alarm if CPU if cpu averages > 80 for 60 seconds
+      MetricName: CPUUtilization
+      AlarmActions:
+      -  !Ref WebServerAutoScalingPolicyAddInstance
+      ComparisonOperator: GreaterThanThreshold
+      Dimensions:
+      - Name: AutoScalingGroupName
+        Value: !Ref WebServerAutoScalingGroup
+      Namespace: AWS/EC2
+      EvaluationPeriods: 1
+      Period: 60 # 1 minute
+      Statistic: Average
+      Threshold: 80
+
+  WebServerCPUAlarmLow:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmDescription: Alarm if CPU if cpu averages < 30 for 3 minutes
+      MetricName: CPUUtilization
+      AlarmActions:
+      -  !Ref WebServerAutoScalingPolicyRemoveInstance
+      ComparisonOperator: LessThanThreshold
+      Dimensions:
+      - Name: AutoScalingGroupName
+        Value: !Ref WebServerAutoScalingGroup
+      Namespace: AWS/EC2
+      EvaluationPeriods: 3
+      Period: 60 # 1 minute
+      Statistic: Average
+      Threshold: 30
 
   AppLB8080Listener:
     Type: AWS::ElasticLoadBalancingV2::Listener
