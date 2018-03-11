@@ -170,11 +170,11 @@ Resources:
     Type: AWS::ElasticLoadBalancingV2::Listener
     Properties:
       DefaultActions:
-        Type: forward
-        TargetGroupArn: !Ref WebTargetGroup
-        LoadBalancerArn: !Ref AppLB
-        Port: 8080
-        Protocol: HTTP
+        - Type: forward
+          TargetGroupArn: !Ref WebTargetGroup
+      LoadBalancerArn: !Ref AppLB
+      Port: 8080
+      Protocol: HTTP
 
   AppLB:
     Type: AWS::ElasticLoadBalancingV2::LoadBalancer
