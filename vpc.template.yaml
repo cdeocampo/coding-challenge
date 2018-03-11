@@ -1,0 +1,179 @@
+---
+AWSTemplateFormatVersion: "2010-09-09"
+
+Description:
+  This CloudFormation script will create the base VPC needed to setup TRIBE's
+  VPC and a bastion server.
+
+Parameters:
+  VpcCidrParam:
+    Type: String
+    Description: Enter the CIDR of the VPC
+  PublicSubnetAParam:
+    Type: String
+    Description: Enter the CIDR of public subnet A
+  PublicSubnetBParam:
+    Type: String
+    Description: Enter the CIDR of public subnet B
+  RegionParam:
+    Type: String
+    Description: Enter the name of the region
+    AllowedValues:
+      - Singapore
+
+Mappings:
+  Traffic:
+    Public:
+      Cidr: 0.0.0.0/0
+  Region:
+    Singapore:
+      AvailabilityZone1: ap-southeast-1a
+      AvailabilityZone2: ap-southeast-2a
+
+Resources:
+  Igw:
+    Type: AWS::EC2::InternetGateway
+    Properties:
+      Tags:
+        - Key: Name
+          Value: TRIBE IGW
+
+  Vpc:
+    Type: AWS::EC2::VPC
+    Properties:
+      CidrBlock: !Ref VpcCidrParam
+      EnableDnsHostnames: true
+      Tags:
+        - Key: Name
+          Value: TRIBE VPC
+
+  VpcAttachGateway:
+    Type: AWS::EC2::VPCGatewayAttachment
+    Properties:
+      VpcId: !Ref Vpc
+      InternetGatewayId: !Ref Igw
+
+  PublicRT:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref Vpc
+      Tags:
+        - Key: Name
+          Value: TRIBE Public RT
+
+  PrivateRT:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref Vpc
+      Tags:
+        - Key: Name
+          Value: TRIBE Private RT
+
+  PublicRTIgwRoute:
+    Type: AWS::EC2::Route
+    Properties:
+      RouteTableId: !Ref PublicRT
+      DestinationCidrBlock: !FindInMap [Traffic, Public, Cidr]
+      GatewayId: !Ref Igw
+
+  PublicSubnetA:
+    Type: AWS::EC2::Subnet
+    Properties:
+      AvailabilityZone: !FindInMap [Region, !Ref RegionParam, AvailabilityZone1]
+      CidrBlock: !Ref PublicSubnetAParam
+      VpcId: !Ref Vpc
+      Tags:
+      - Key: Name
+        Value: TRIBE Public Subnet A AZ=A
+
+  PublicSubnetB:
+    Type: AWS::EC2::Subnet
+    Properties:
+      AvailabilityZone: !FindInMap [Region, !Ref RegionParam, AvailabilityZone2]
+      CidrBlock: !Ref PublicSubnetBParam
+      VpcId: !Ref Vpc
+      Tags:
+      - Key: Name
+        Value: TRIBE Public Subnet B AZ=B
+
+  PrivateSubnetA:
+    Type: AWS::EC2::Subnet
+    Properties:
+      AvailabilityZone: !FindInMap [Region, !Ref RegionParam, AvailabilityZone1]
+      CidrBlock: !Ref PrivateSubnetAParam
+      VpcId: !Ref Vpc
+      Tags:
+      - Key: Name
+        Value: TRIBE Private Subnet A AZ=A
+
+  PrivateSubnetB:
+    Type: AWS::EC2::Subnet
+    Properties:
+      AvailabilityZone: !FindInMap [Region, !Ref RegionParam, AvailabilityZone2]
+      CidrBlock: !Ref PrivateSubnetBParam
+      VpcId: !Ref Vpc
+      Tags:
+      - Key: Name
+        Value: TRIBE Private Subnet B AZ=B
+
+  PublicSubnetARTAssoc:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      RouteTableId: !Ref PublicRT
+      SubnetId: !Ref PublicSubnetA
+
+  PublicSubnetBRTAssoc:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      RouteTableId: !Ref PublicRT
+      SubnetId: !Ref PublicSubnetB
+
+  PrivateSubnetARTAssoc:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      RouteTableId: !Ref PrivateRT
+      SubnetId: !Ref PrivateSubnetA
+
+  PrivateSubnetBRTAssoc:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      RouteTableId: !Ref PrivateRT
+      SubnetId: !Ref PrivateSubnetB
+
+  NatElasticIP:
+    Type: AWS::EC2::EIP
+    Properties:
+      Domain: vpc
+
+  NatGateway:
+    Type: AWS::EC2::NatGateway
+    Properties:
+      AllocationId: !GetAtt NatElasticIP.AllocationId
+      SubnetId: !Ref PublicSubnetA
+
+  PrivateRoute:
+    Type: AWS::EC2::Route
+    Properties:
+      DestinationCidrBlock: 0.0.0.0/0
+      NatGatewayId: !Ref NatGateway
+      RouteTableId: !Ref PrivateRT
+
+Outputs:
+  VpcId:
+    Description: ID of recently created VPC
+    Value: !Ref Vpc
+  PublicSubnetA:
+    Description: ID of public subnet A
+    Value: !Ref PublicSubnetA
+  PublicSubnetB:
+    Description: ID of public subnet B
+    Value: !Ref PublicSubnetB
+  PrivateSubnetA:
+    Description: ID of private subnet A
+    Value: !Ref PrivateSubnetA
+  PrivateSubnetB:
+    Description: ID of private subnet B
+    Value: !Ref PrivateSubnetB
+  NatIp:
+    Description: Public IP of NAT Gateway
+    Value: !Ref NatElasticIP
