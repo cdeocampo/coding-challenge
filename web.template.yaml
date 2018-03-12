@@ -223,7 +223,7 @@ Resources:
           Cpu: 10
           Memory: 128
           PortMappings:
-            - ContainerPort: 8080
+            - ContainerPort: 80
               HostPort: 8080
           Essential: true
       Family: webserver
@@ -238,7 +238,7 @@ Resources:
       DesiredCount: 1
       LoadBalancers:
       - TargetGroupArn: !Ref WebTargetGroup
-        ContainerPort: 8080
+        ContainerPort: 80
         ContainerName: WebServer
       Cluster: !Ref EcsCluster
 
